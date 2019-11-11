@@ -1,0 +1,155 @@
+\title{Two-way range and range-rate observables in a sequential filter}
+\author{
+        John~O.~Woods \\
+                Guidance, Navigation \& Control\\
+        Open Lunar Foundation\\
+        San Francisco, California
+}
+\date{\today}
+
+\documentclass[12pt]{article}
+\usepackage{natbib}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\bibliographystyle{unsrtnat}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+Imagine that an earth-based satellite dish transmits a signal to a spacecraft over some short interval $dt_1$ at $t_1$, that the spacecraft receives that signal over some interval $dt_2$ at $t_2$, and immediately transmits it back to the same ground station, which receives it over duration $dt_3$ at $t_3$. The two observables in which we are interested are 
+\begin{enumerate}
+\item the round-trip time-of-flight, which gives us an approximate range to the spacecraft; and
+\item the ratio of signal transmission and reception intervals\footnote{This can also be written as the ratio of frequencies at reception and transmission.} (the Doppler shift) between transmission and eventual reception, which provides information about the rate at which the range is changing (the range-rate).
+\end{enumerate}
+
+While \citet{Moyer1971} has derived models for one-way, two-way, and three-way observables, we are interested only in the two-way solutions, which avoids many of the clock problems which befall our measurements in one-way and three-way methods. 
+
+\section{Range--rate observable}
+The most basic form of the range--rate observable is
+\begin{equation}
+F = \frac{N}{T_c} - f_\text{bias}
+\end{equation}
+where $f_\text{bias}$ is $C_4=10^6$ (for S-band), $N$ is the number of cycles, and $T_c$ is the time over which those cycles were received. Since
+\begin{equation}
+N = \int_{T_c} f\,dt\,\text{,}
+\end{equation}
+where $f$ is the frequency, we can write
+\begin{equation}
+F = \frac{1}{T_c}\int_{t_3 - T_c/2}^{t_3 + T_c/2} (f - f_\text{bias}) dt_3\,\text{.}
+\end{equation}
+Moyer's Equation~285 gives an expression for the value in the integral:
+\begin{equation}
+f - f_\text{bias} = C_3 f_q \left(1 - \frac{f_R}{f_T}\right)
+\end{equation}
+where $f_R$ is the frequency received, $f_T$ is the transmitted frequency, $f_q$ is the clock frequency (which we treat as being the same at $t_1$ and $t_3$), and $C_3=96(240/221)$. 
+
+According to Moyer, the integral gives a Taylor series:
+\begin{eqnarray}
+F &=& C_3 f_q\left(1 - \frac{f_R}{f_T}\right)^\ast \\
+\left(1 - \frac{f_R}{f_T}\right)^\ast &=& \left(1 - \frac{f_R}{f_T}\right) +  \left(\frac{T_c^2}{24}\right)\frac{d^2}{dt_3^2}\!\left[1 - \frac{f_R}{f_T}\right]
+\end{eqnarray}
+
+The full expansion is quite complicated. Luckily, it can also be expressed more simply as a difference in times-of-flight. The full derivation is not included here, but the result is Equation~480 in Moyer,
+\begin{equation}
+F = C_3 f_q \frac{\tau_{2_e} - \tau_{2_s}}{T_c}\,\text{,}
+\end{equation}
+where $\tau_{2_e}$ is the round-trip time for the end of the signal, and $\tau_{2_s}$ is the same for the start of the signal.\footnote{Moyer uses $\rho$ instead of $\tau$, but I find this confusing, since $\rho$ usually indicates a range.}
+
+\newcommand{\vecr}{\mathrm{r}}
+\newcommand{\vecv}{\mathrm{v}}
+\newcommand{\veca}{\mathrm{a}}
+\newcommand{\vecb}{\mathrm{b}}
+
+Typically, $T_c$ is the signal duration at receipt (which for our purposes is just over a second). We can write
+\begin{equation}
+\Delta\tau_2 = \tau_{2_e} - \tau_{2_s}
+\end{equation}
+and each time-of-flight is defined in terms of the ranges traversed by the signal,
+\begin{equation}
+ \tau_2 = \frac{r_{12} + r_{23}}{c}\label{eq:range_observable}
+\end{equation}
+where we define
+\begin{eqnarray}
+r_{12} &=& \| \vecr_2 - \vecr_1 \| \\
+r_{23} &=& \| \vecr_3 - \vecr_2 \|\,\text{.}
+\end{eqnarray}
+
+If we think of the quantity $\frac{\Delta\tau_2}{T_c}$ as twice the change in position over the receive time interval, divided by $c$, we can see that it resembles a velocity. We rewrite our observable in terms of the range-rate:
+\begin{eqnarray}
+F &=& C_3 f_q \frac{d\tau_2}{dt_3} \\
+\frac{d\tau_2}{dt_3} &=& \frac{d}{dt_3} \frac{ \| \vecr_2 - \vecr_1\| + \| \vecr_3 - \vecr_2 \| }{c} \nonumber\\
+&=& \frac{\frac{d}{dt_3}\!\left[ \left(\left(\vecr_2 - \vecr_1\right)^\top\left(\vecr_2 - \vecr_1\right)\right)^{1/2} + \left(\left(\vecr_3 - \vecr_2\right)^\top\left(\vecr_3 - \vecr_2\right)\right)^{1/2} \right]}{c}\,\text{.}
+\end{eqnarray}
+
+To compute the derivative in the expression above, we need to refresh a few identities.\footnote{If these don't make sense, a good reference is \url{https://en.wikipedia.org/wiki/Matrix_calculus\#Identities}.} Firstly, suppose that vectors $\veca$ and $\vecb$ are both functions of $t$. Then
+\begin{eqnarray}
+\frac{d}{dt} \| \veca - \vecb \| &=& \frac{d}{dt} \left( \left(\veca - \vecb\right)^\top\left(\veca - \vecb\right) \right)^{1/2} \nonumber \\
+&=& \frac{1}{2} \left( \left(\veca - \vecb\right)^\top\left(\veca - \vecb\right) \right)^{-1/2} \left(2 \left(\veca - \vecb\right)^\top(\dot{\veca} - \dot{\vecb}) \right) \nonumber \\
+&=& \frac{\left(\veca - \vecb\right)^\top(\dot{\veca} - \dot{\vecb})}{\|\veca - \vecb\|}\,\text{,}
+\end{eqnarray}
+and we call this expression $\mathrm{G}(\veca,\vecb)$.
+
+Next, we need to find the differentials of $\mathrm{G}$ with respect to each of $\veca$, $\vecb$, $\dot{\veca}$, and $\dot{\vecb}$.
+\begin{eqnarray}
+\frac{\partial G}{\partial\veca} &=& -\frac{1}{2} \left( \left(\veca - \vecb\right)^\top\left(\veca - \vecb\right) \right)^{-3/2} \left(\veca - \vecb\right)^\top(\dot{\veca} - \dot{\vecb}) \left(2 (\veca - \vecb)^\top \right) \nonumber\\
+&& + \left( \left(\veca - \vecb\right)^\top\left(\veca - \vecb\right) \right)^{-1/2} (\dot{\veca} - \dot{\vecb})^\top \nonumber \\
+%
+&=& -\frac{\left(\veca - \vecb\right)^\top(\dot{\veca} - \dot{\vecb})}{\|\veca - \vecb\|^3}(\veca - \vecb)^\top + \frac{1}{\|\veca - \vecb\|} (\dot\veca - \dot\vecb)^\top
+\end{eqnarray}
+and
+\begin{eqnarray}
+\frac{\partial G}{\partial\vecb} &=& \frac{\left(\veca - \vecb\right)^\top(\dot{\veca} - \dot{\vecb})}{\|\veca - \vecb\|^3}(\veca - \vecb)^\top - \frac{1}{\|\veca - \vecb\|} (\dot\veca - \dot\vecb)^\top \\
+\frac{\partial G}{\partial\dot{\veca}} &=& \frac{1}{\|\veca - \vecb\|} (\veca - \vecb)^\top \\
+\frac{\partial G}{\partial\dot{\vecb}} &=& -\frac{1}{\|\veca - \vecb\|} (\veca - \vecb)^\top
+\end{eqnarray}
+
+We need only define the Kalman filter state:
+\begin{equation}
+\mathrm{x} = \begin{bmatrix} \vecr_2 & \vecv_2 \end{bmatrix}^\top\,\text{,}
+\end{equation}
+where $\vecv = \dot{\mathrm{r}}_2$.
+
+\subsection{Range-rate measurement partial}
+We now have all the tools we need to compute the measurement partial
+\begin{eqnarray*}
+H &=& \frac{\partial F}{\partial \mathrm{x}} \\
+ &=& \begin{bmatrix} \frac{\partial F}{\partial\mathrm{r_2}} & \frac{\partial F}{\partial\mathrm{v_2}} \end{bmatrix}
+\end{eqnarray*}
+with
+\begin{align}
+\begin{split}
+\frac{\partial F}{\partial\mathrm{r_2}} ={}& \frac{C_3 f_q}{c}\left( \frac{\partial G(\vecr_2, \vecr_1)}{\partial \vecr_2} + \frac{\partial G(\vecr_3, \vecr_2)}{\partial \vecr_2}\right)
+\end{split} \nonumber\\
+\begin{split} ={}& \frac{C_3 f_q}{c}\left( %
+ -\frac{\left(\vecr_2 - \vecr_1\right)^\top(\vecv_2 - \vecv_1)}{r_{12}^3}(\vecr_2 - \vecr_1)^\top + \frac{1}{r_{12}} (\vecv_2 - \vecv_1)^\top \right. \\
+& + \left. \frac{\left(\vecr_3 - \vecr_2\right)^\top(\vecv_3 - \vecv_2)}{r_{23}^3}(\vecr_3 - \vecr_2)^\top - \frac{1}{r_{23}} (\vecv_3 - \vecv_2)^\top\right)
+ \end{split} \\
+\begin{split}
+\frac{\partial F}{\partial\mathrm{v_2}} ={}& \frac{C_3 f_q}{c}\left( \frac{\partial G(\vecr_2, \vecr_1)}{\partial \vecv_2} + \frac{\partial G(\vecr_3, \vecr_2)}{\partial \vecv_2}\right)
+\end{split} \nonumber\\
+\begin{split}
+={}& \frac{C_3 f_q}{c} \left( \frac{1}{r_{12}} (\vecr_2 - \vecr_1)^\top - \frac{1}{r_{23}} (\vecr_3 - \vecr_2)^\top \right)
+\end{split}
+\end{align}
+
+\subsection{Measurement covariance}
+The measurement covariance for the Doppler observable ought to be constant regardless of range. A single measurement ought to have a $\sigma_{\dot{\rho}} = 1\text{ mm/s}$. However, the measurements are expressed as a frequency, so we need to convert:
+\begin{equation}
+R_\text{doppler} = \left(\frac{C_e f_q}{c}\sigma_{\dot{\rho}}\right)^2\,\text{.}
+\end{equation}
+
+\section{Range observable}
+The observable for two-way range is approximately Eq.~\ref{eq:range_observable}.\footnote{The full expression is Equation~379 by Moyer.} Preliminary analysis (not shown) suggests two-way range information does not improve the state covariance in the context of Doppler measurements, so we don't perform a detailed derivation. The measurement partial is
+\begin{equation}
+H = \frac{1}{c}\left( \frac{(\vecr_2 - \vecr_1)^\top}{r_{12}} - \frac{(\vecr_3 - \vecr_2)^\top}{r_{23}}\right)\,\text{,}
+\end{equation}
+which is basically identical to the range-rate observable with respect to the changing velocity.
+
+Since the observable is a round-trip time, we must divide our expected $\sigma_\rho = 2\text{ m}$ by the speed of light to get our measurement covariance:
+\begin{equation}
+R_\text{range} = \left(\frac{\sigma_\rho}{c}\right)^2\,\text{.}
+\end{equation}
+
+\bibliography{memo}
+\end{document}
