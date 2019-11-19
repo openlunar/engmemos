@@ -1,0 +1,269 @@
+\title{Navigation filter design towards a lunar lander}
+\author{
+        John~O.~Woods,~Ph.D. \\
+                Guidance, Navigation \& Control\\
+        Open Lunar Foundation\\
+        San Francisco, California
+}
+\date{\today}
+
+\documentclass[12pt]{article}
+\usepackage{natbib}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{upgreek}
+\bibliographystyle{unsrtnat}
+
+\newcommand{\Tf}[2]{\ensuremath{\mathrm{T}_{#1}^{#2}}}
+\newcommand{\dotTf}[2]{\ensuremath{\dot{\mathrm{T}}_{#1}^{#2}}}
+\newcommand{\skewsymm}[1]{\ensuremath{\left[ #1 \times \right]}}
+\newcommand{\eye}{\ensuremath{\mathrm{I}}}
+\newcommand{\Qf}[2]{\ensuremath{\mathrm{q}_{#1}^{#2}}}
+\newcommand{\vecx}{\ensuremath{\mathrm{x}}}
+\newcommand{\vecxh}{\ensuremath{\hat{\mathrm{x}}}}
+\newcommand{\dotvecx}{\ensuremath{\dot{\mathrm{x}}}}
+\newcommand{\vecb}{\ensuremath{\mathrm{b}}}
+\newcommand{\dotvecb}{\ensuremath{\dot{\mathrm{b}}}}
+\newcommand{\vecr}{\ensuremath{\mathrm{r}}}
+\newcommand{\vecv}{\ensuremath{\mathrm{v}}}
+\newcommand{\vecn}{\ensuremath{\mathrm{n}}}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+The Open Lunar Foundation has a sequence of three missions planned: a \textsc{leo} \textsc{3u} cubesat, a lunar orbiter, and a lunar lander. Each mission is designed to test concepts and hardware applicable for subsequent missions, with an emphasis on providing open source solutions that can be utilized by other teams.
+
+\subsection{Sensors}
+While a typical low-earth orbit cubesat includes a \textsc{gps} receiver, our mission relies primarily on horizon recognition \citep{Christian2017} for positioning, in order to build a rendering and simulation capability for future terrain-relative navigation technologies needed for landing, as well as to reduce reliance on potentially expensive two-way radiometric solutions. We use a star tracker for attitude, with an \textsc{imu} used for the propagation.
+
+\subsection{Frames}
+Let us define some attitude frames:
+\begin{itemize}
+\item $i$ for the inertial frame (centered on either the earth or the moon);
+\item $e$ for the earth-centered, earth-fixed frame;
+\item $l$ for the lunar-centered, lunar-fixed frame;
+\item $p$ for a generic planet-centered, planet-fixed frame (which could be either $e$ or $l$);
+\item $b$ for the spacecraft's body frame;
+\item $c$ to indicate the sensor case frame for either the star tracker or the horizon camera, as needed; and
+\item $pa$ to indicate a cone principal axis frame for horizon navigation.
+\end{itemize}
+
+\subsection{Quaternions}
+Rotations may be represented as direction cosine matrices or as unit quaternions \citep{Markley2003}. A unit quaternion is defined as
+\begin{equation}
+\mathrm{q} = \begin{bmatrix}%
+q_w \\
+q_x \\
+q_y \\
+q_z\end{bmatrix} = \begin{bmatrix}\cos(\phi / 2) \\
+\mathrm{e} \sin(\phi / 2) \end{bmatrix}\,\text{,}\label{eq:quaternion}
+\end{equation}
+where $\mathrm{e}$ is the axis of rotation and $\phi$ is the angle. If we write $\mathrm{q}_v = \begin{bmatrix}q_x & q_y & q_z\end{bmatrix}^\top$, then we can relate the quaternion to the direction cosine matrix by
+\begin{equation}
+\mathrm{T}(\mathrm{q}) = \left(q_w^2 - q_v^2\right)\eye_3 - 2 q_w \skewsymm{\mathrm{q}_v} + 2\mathrm{q}_v\mathrm{q}_v^\top\,\text{.}
+\end{equation}
+Note that $\mathrm{q}$ and $-\mathrm{q}$ are degenerate; they represent the same rotation matrix. We arbitrarily restrict $q_w \geq 0$.
+
+We write the quaternion product as
+\begin{equation}
+\mathrm{p} \otimes \mathrm{q} = \begin{bmatrix}p_w q_w - \mathrm{p}_v^\top\mathrm{q_v} \\
+p_w \mathrm{q}_v + q_w \mathrm{p}_v - \mathrm{p}_v \times \mathrm{q}_v\end{bmatrix}
+\end{equation}
+as in \citet{Shuster1993}. We can relate quaternion products to the matrix products of transformation matrices as
+\begin{equation}
+\mathrm{T}(\mathrm{p})\, \mathrm{T}(\mathrm{q}) = \mathrm{T}(\mathrm{p} \otimes \mathrm{q})\,\text{.}
+\end{equation}
+
+We can also write the rate of change of a quaternion as
+\begin{eqnarray}
+\dot{\mathrm{q}} &=& \frac{1}{2}\Omega(\upomega) \mathrm{q} \\
+\Omega(\upomega) &=& \begin{bmatrix} 0 & -\upomega^\top \\
+\upomega & -\skewsymm{\upomega}\end{bmatrix}\,\text{,}\label{eq:qdot}
+\end{eqnarray}
+where $\upomega$ the angular rate $\omega$ multiplied by the unit vector defining the axis about which the rotation is occurring.
+
+\subsection{Attitude errors}
+We define $\Tf{a}{b} = \Qf{a}{b}$ as the $3\times 3$ transformation from frame $a$ to frame $b$.
+
+Suppose that some sensor's true mounting (after spacecraft assembly) has the frame transformation \Tf{b}{c}. Then we define
+\begin{equation}
+\Tf{b}{c} = \Tf{\hat{c}}{c} \Tf{b}{\hat{c}}
+\end{equation}
+as the matrix product of body-to-nominal-mount \Tf{b}{\hat{c}} and the nominal-mount-to-actual-mount \Tf{\hat{c}}{c}. Moreover, we can use the small angle approximation to define, without loss of generality,
+\begin{eqnarray}
+\Tf{\hat{A}}{A} &\approx& \eye - \skewsymm{\mathrm{a}} \\
+\mathrm{a} &=& \begin{bmatrix} a_x & a_y & a_z\end{bmatrix}^\top
+\end{eqnarray}
+which is defined by the unit-vector axis $\frac{\mathrm{a}}{a}$, with $a$ being the angular rotation about that axis.\footnote{This definition follows from Equations~1 and 25 of \citet{Markley2003}.} The skew-symmetric matrix is defined as
+\begin{equation}
+\skewsymm{a} = \begin{bmatrix}%
+0 & -a_z & a_y \\
+a_z & 0 & -a_x \\
+-a_y & a_x & 0%
+\end{bmatrix}\,\text{.}
+\end{equation}
+We can also approximate the inverse as
+\begin{equation}
+\Tf{A}{\hat{A}} \approx \eye + \skewsymm{\mathrm{a}}\,\text{.}
+\end{equation}
+
+\section{State}
+Note that we write the state as \vecx and the estimated state as \vecxh. For simplicity, we usually drop the hat, but sometimes retain it for clarity.
+
+We define our state as
+\begin{equation}
+\vecx = \begin{bmatrix} \vecr & \vecv & \delta\upphi & \vecb_a & \vecb_g \end{bmatrix}^\top
+\end{equation}
+where each component is a length-3 sub-vector. \vecr is the position of the spacecraft \textsc{imu} in the inertial frame, \vecv is its velocity, $\upphi$ the attitude error, and $\vecb_a$ and $\vecb_g$ the accelerometer and gyroscope bias terms. In the future, we may also include `constant' misalignment terms for the sensors.\footnote{We call these terms constant because they are not propagated, but they may be estimated by measurements.}
+
+\subsection{State propagation}
+The position and velocity states are propagated according to
+\begin{eqnarray}
+\dot{\vecr} &=& \vecv \\
+\dot{\vecv} &=& \mathrm{a}_g + \mathrm{a}_{ng}\nonumber\,\text{,}
+\end{eqnarray}
+where the two acceleration terms are the gravitational and non-gravitational components. The former of these is not observable by the \textsc{imu} (since the \textsc{imu} measures zero acceleration in free fall), but the latter is observable in the \textsc{imu} case frame as $\mathrm{a}_c$. We can rewrite it in terms of the accelerometer measurement as
+\begin{equation}
+\dot{\vecv} = \mathrm{a}_g + \mathrm{T}(\Qf{b}{i})\, \Tf{c}{b} \, \mathrm{a}_c\,\text{.}
+\end{equation}
+
+Likewise, we can propagate the attitude estimate --- which is not part of the state vector --- using Eq.~\ref{eq:qdot} in terms of the case-frame gyroscope measurement, which is the same as the body-frame gyroscope measurement, e.g. ${}_c\upomega_{c/i} = {}_b\upomega_{b/i}$; the attitude propagation is given by
+\begin{equation}
+\dot{\mathrm{q}}_i^b = \Omega({}_b\upomega_{b/i}) \Qf{i}{b}\,\text{.}
+\end{equation}
+
+The bias terms all have a rate of zero; they are not propagated.
+
+\subsection{Error propagation}
+Although we propagate the quaternion as part of the state, our attitude covariance reflects the attitude error component of the state vector. Similarly, the bias terms are not propagated, but since they are estimated, we need to be able to propagate our certainty about them. We must therefore come up with time derivatives for these terms.
+
+We follow \citet{Bishop2016} in writing
+\begin{equation}
+\Qf{i}{b} = \Qf{\hat{b}}{b} \otimes \Qf{i}{\hat{b}}
+\end{equation}
+and defining the attitude error as the rotation from the estimated body frame to the true body frame,
+\begin{equation}
+\delta\mathrm{q}_b = \Qf{\hat{b}}{b}\,\text{.}
+\end{equation}
+Given the definition of the quaternion from Eq.~\ref{eq:quaternion}, a small angle assumption allows us to write
+\begin{equation}
+\delta\mathrm{q}_b \approx \begin{bmatrix} 0 \\ \frac{1}{2}\delta\upphi \end{bmatrix}\,\text{.}
+\end{equation}
+We can then write the time derivative of the attitude error's vector component as
+\begin{equation}
+\delta\dot{\mathrm{q}}_{b_v} = -\skewsymm{{}_b\upomega_{b/i}} \delta\mathrm{q}_{b_v} - \frac{1}{2} \delta\vecb_g\,\text{,}
+\end{equation}
+the first term of which is recognizable as the quaternion time-rate-of-change equation rewritten with a small angle assumption, and the second term of which is the gyroscope bias. If we write it instead as the time-rate-of-change of the attitude error rotation vector, we get
+\begin{equation}
+\delta\dot{\upphi} = -\skewsymm{{}_b\upomega_{b/i}} \delta\upphi - \delta\vecb_g\,\text{.}
+\end{equation}
+
+We can also write the attitude error in matrix notation using
+\begin{eqnarray}
+\mathrm{T}(\Qf{i}{b}) &=& \Tf{\hat{b}}{b} \, \mathrm{T}(\Qf{i}{\hat{b}}) = \delta\mathrm{T}_b \, \mathrm{T}(\Qf{i}{\hat{b}}) \nonumber \\
+ &=& \left(\eye - \skewsymm{\delta\upphi}\right)\mathrm{T}(\Qf{i}{\hat{b}})\,\text{.}
+\end{eqnarray}
+
+Finally, the errors on the bias terms are propagated as exponentially correlated random variables, 
+\begin{equation}
+\delta\dot{\vecb} = -\frac{1}{\tau}\delta\vecb + \upnu\,\text{,}
+\end{equation}
+where $\upnu$ is zero-mean white noise, $\tau$ is the time constant, and $\delta\vecb = \vecb - \hat{\vecb}$ for each bias term.
+
+\subsection{Dynamics matrix}
+If our states \vecx\ are propagated by \dotvecx, we can linearize at some prior state $\hat{\vecx}$ and define a dynamics matrix as
+\begin{equation}
+\mathrm{F} = \left.\frac{\partial\dotvecx}{\partial\vecx}\right|_{\vecx = \hat{\vecx}}\,\text{.}
+\end{equation}
+The nonzero components of this matrix are
+\begin{eqnarray}
+\frac{\partial\dot{\vecr}}{\partial\vecv} &=& \eye \\
+\frac{\partial\dot{\vecv}}{\partial\vecr} &=& \mathrm{G}(\vecr + \vecr_\text{cg/imu}) \\
+\frac{\partial\delta\dot{\upphi}}{\partial\upphi} &=& -\skewsymm{{}_b \tilde{\upomega}_{b/i}} \\
+\frac{\partial\delta\dot{\upphi}}{\partial\vecb_g} &=& -\eye \\
+\frac{\partial\delta\dot{\vecb}}{\partial\vecb} &=& -\frac{1}{\tau} \eye_{6\times 6}\,\text{.}
+\end{eqnarray}
+
+Note that the gravity gradient is given by
+\begin{equation}
+\mathrm{G}(\vecr) = \frac{3\mu}{r^5} \vecr\vecr^\top - \frac{\mu}{r^3}\eye\,\text{.}
+\end{equation}
+
+%The derivations for the time-derivative of the rotation vector are surveyed by \citet{Shuster1993rotvec}; the kinematic equation is
+%\begin{equation*}
+%\dot{\upphi} = \upomega + \frac{1}{2}\upphi \times \upomega + \frac{1}{\phi^2}\left(1 - \frac{\phi}{2}\cot\frac{\phi}{2}\right) \upphi \times \left(\upphi \times \upomega\right)\,\text{.}
+%\end{equation*}
+%Since the attitude error has zero-mean, we linearize it about that mean and write
+%\begin{equation}
+%\dot{\upphi} = \upomega + \frac{1}{2}\upphi \times \upomega\,\text{.} 
+%\end{equation}
+
+\subsection{State transition matrix}
+We use a first-order approximation for the state transition matrix,
+\begin{equation}
+\Phi(t_k + \Delta t, t_k) \approx \eye + \mathrm{F} \Delta t\,\text{.}
+\end{equation}
+This can be used to propagate the covariance forward in time:
+\begin{equation}
+\mathrm{P}_k^{-} = \Phi_{k,k-1} \mathrm{P}_{k-1}^{+} \Phi_{k,k-1}^\top + \mathrm{Q}_k
+\end{equation}
+
+\subsection{State update}
+We use the Joseph form of the state update. See \citet{Bishop2016}, Eqs.~12--15.
+
+\section{Measurement models}
+\subsection{Horizon}
+We use the horizon navigation model described by \citet{Christian2017}.
+
+\subsubsection{Summary}
+Given a camera image of a lit horizon arc, we define a principal axis frame $pa$, whose $z$ axis points from the camera to the center of the planet, and whose $x$ axis is defined by the vector from the sun to the camera. The transformation from the camera frame to the principal axis frame is given by 
+\begin{eqnarray}
+\Tf{c}{pa} &=& \begin{bmatrix} \mathrm{e}_x & \mathrm{e}_y & \mathrm{e}_z \end{bmatrix} \\
+\mathrm{e}_z &=& -\frac{\vecr_{c/p}}{r_{c/p}} \\
+\mathrm{e}_s &=& \frac{\vecr_{c/s}}{r_{c/s}} \\
+\mathrm{e}_y &=& \mathrm{e}_z \times \mathrm{e}_s \\
+\mathrm{e}_x &=& \mathrm{e}_y \times \mathrm{e}_z\,\text{,}
+\end{eqnarray}
+where the subscripts $c/p$ and $c/s$ represent the camera with respect to the planet and sun, respectively.
+
+The position of the spacecraft camera with respect to the visible planet is given by
+\begin{equation}
+\vecr_{c/p} = -(\vecn^\top \vecn - 1)^{-1/2} \Tf{pa}{c} \mathrm{Q}^{-1} \vecn\,\text{,}\label{eq:horizon_model}
+\end{equation}
+where the semi axes of the planet ellipsoid model are given by $a$, $b$, and $c$ in 
+\begin{equation}
+\mathrm{Q}^{-1} = \begin{bmatrix} a & 0 & 0 \\ 0 & b & 0 \\ 0 & 0 & c\end{bmatrix}\,\text{.}
+\end{equation}
+\vecn\ is the solution to a linear least squares problem,
+\begin{equation}
+\begin{bmatrix} %
+\bar{\mathrm{s}}_1'^\top \\ %
+\vdots \\
+\bar{\mathrm{s}}_m'^\top %
+\end{bmatrix}\mathrm{n} = 1_{m\times 1}
+\end{equation}
+where
+\begin{eqnarray}
+\bar{\mathrm{s}}_i' &=& \frac{\bar{\mathrm{s}}_i}{\bar{s}_i} \\
+\bar{\mathrm{s}}_i &=& \mathrm{Q}\, \Tf{c}{pa}\, \mathrm{s}_i \\
+\mathrm{s}_i &=& \begin{bmatrix}x_i \\ y_i \\ 1\end{bmatrix} = \begin{bmatrix}%
+\frac{1}{d_x} & -\frac{\alpha}{d_x d_y} & \frac{\alpha v_p - d_y u_p}{d_x d_y} \\
+0 & \frac{1}{d_y} & -\frac{v_p}{d_y} \\
+0 & 0 & 1\end{bmatrix}\begin{bmatrix}u_i \\ v_i \\ 1\end{bmatrix}\,\text{.}
+\end{eqnarray}
+The last of these equations gives the pinhole camera model mapping the pixel coordinates of $m$ points on a body's lit limb $u_i, v_i$ to image plane coordinates $x_i, y_i$ using the camera parameters $\alpha$ (detector array skewness), $d_x$ and $d_y$ (ratio of focal length to pixel pitch), and principal point $(u_p, v_p)$ (the boresight intersection with the image plane). It is not straightforward to define $\bar{\mathrm{s}}'_i$ in a concise way, but we may think of them as unit vectors from the camera to the observed points in a world where the planet is a sphere of radius 1. In that same world, then, \vecn\ is a vector pointing from the camera to the center of the sphere. \citep{Christian2016}
+
+\subsubsection{Model}
+Having now briefly described the model, we can start to put it in the correct terms for our navigation filter. Eq.~\ref{eq:horizon_model} is given in terms of the camera position with respect to the planet, but we may choose to navigate relative to a planet that is not at the origin of our inertial frame. For example, we may wish to navigate with respect to the moon while still well outside of the moon's sphere-of-influence.
+
+
+
+%With semi-axes $a$, $b$, and $c$ of the ellipsoid model, we compute a body shape matrix
+%\begin{equation}
+%\mathrm{A} = \Tf{c}{pa}\begin{bmatrix} 1/a^2 & 0 & 0 \\ 0 & 1/b^2 & 0 \\ 0 & 0 & 1/c^2 \end{bmatrix} \Tf{pa}{c}\,\text{.}
+%\end{equation}
+%Singular value decomposition is used to 
+
+\bibliography{filter}
+\end{document}
