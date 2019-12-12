@@ -27,6 +27,7 @@
 \newcommand{\vecr}{\ensuremath{\mathrm{r}}}
 \newcommand{\vecv}{\ensuremath{\mathrm{v}}}
 \newcommand{\vecn}{\ensuremath{\mathrm{n}}}
+\newcommand{\vecy}{\ensuremath{\mathrm{y}}}
 
 \begin{document}
 \maketitle
@@ -44,9 +45,8 @@ Let us define some attitude frames:
 \item $e$ for the earth-centered, earth-fixed frame;
 \item $l$ for the lunar-centered, lunar-fixed frame;
 \item $p$ for a generic planet-centered, planet-fixed frame (which could be either $e$ or $l$);
-\item $b$ for the spacecraft's body frame;
-\item $c$ to indicate the sensor case frame for either the star tracker or the horizon camera, as needed; and
-\item $pa$ to indicate a cone principal axis frame for horizon navigation.
+\item $b$ for the spacecraft's body frame; and
+\item $c$ to indicate the sensor case frame for either the star tracker or the horizon camera, as needed;
 \end{itemize}
 
 \subsection{Quaternions}
@@ -209,27 +209,121 @@ This can be used to propagate the covariance forward in time:
 \mathrm{P}_k^{-} = \Phi_{k,k-1} \mathrm{P}_{k-1}^{+} \Phi_{k,k-1}^\top + \mathrm{Q}_k
 \end{equation}
 
-\subsection{State update}
-We use the Joseph form of the state update. See \citet{Bishop2016}, Eqs.~12--15.
+However, we may use a more carefully optimized formulation, from \cite{DSouza2011}, if processor cycles are in doubt.
+%\begin{eqnarray*}
+%\Phi(t_{k+1}, t_k) &=& \mathbf{I} + \mathbf{F}(t_k)\left(t_{k+1} - t_k\right) = \mathbf{I} + \mathbf{F}_k\,\Delta t\,\textrm{ and}\nonumber\\
+%\Phi(t_{k+1}, t_{k-1}) &=& \Phi(t_{k+1}, t_k)\,\Phi(t_k, t_{k-1})\,\textrm{, so}\nonumber\\
+%\Phi(t_{k+1}, t_{k-1}) &=& \Phi(t_k, t_{k-1}) + \mathbf{F}(t_k)\,\Phi(t_k, t_{k-1})\,\Delta t\,\textrm{.}
+%\end{eqnarray*}
 
-\section{Measurement models}
+\subsection{State update}
+
+We have a choice between state update maths which dramatically changes the floating point requirements on the flight hardware.
+
+We always start by computing the measurement residual
+\begin{equation}
+\delta\mathrm{y} = \tilde{\mathrm{y}} - \mathrm{h}(\hat{\mathrm{x}})\,\text{,}
+\end{equation}
+where $\tilde{\mathrm{y}}$ is the vector measurement, and $\mathrm{h}(\hat{\mathrm{x}})$ is the measurement model evaluated at some estimated state $\hat{\mathrm{x}}$. We also need the measurement sensitivity matrix,
+\begin{equation}
+\mathrm{H} = \left. \frac{\partial \mathrm{h}(x)}{\partial \mathrm{x}}\right|_{\mathrm{x} = \hat{\mathrm{x}}}\,\text{,}
+\end{equation}
+and the measurement residual covariance $\mathrm{R}$.
+
+\subsubsection{Vector state update}
+
+We first compute the innovation covariance and underweighted innovation covariance,
+\begin{eqnarray}
+\mathrm{W} &=& \mathrm{H}\mathrm{P}^{-}\mathrm{H}^\top + \mathrm{R} \\
+\mathrm{W}_u &=& \mathrm{W}k_u\,\text{,}
+\end{eqnarray}
+where $k_u$ is the underweighting scalar (some value between 0 and 1, defaulting to 1).
+
+The measurement residual is now tested to see if it is an outlier; this process is occasionally referred to as a \textit{residual edit check}. For a vector measurement, the square root of
+\begin{equation}
+z^2 = \mathrm{\delta y}^\top \mathrm{W}^{-1} \mathrm{\delta y} \label{eq:vector_residual_edit_check}
+\end{equation}
+gives the number of standard deviations between the measurement and the measurement model (telling us how much of an outlier it might be relative to the current state estimate). If $z^2 > z_\text{max}^2$, we reject the measurement (and do not update the state or covariance with it).
+
+Since $\mathrm{W}$ ought to be positive definite, we can use a Cholesky decomposition. Many measurements are $3\times 3$, for which the Cholesky factorization algorithm is fairly straightforward. We write
+\begin{eqnarray*}
+z^2 &=& \mathrm{\delta y}^\top \left( \mathrm{L} \mathrm{L}^\top \right)^{-1}\mathrm{\delta y} \nonumber \\
+      &=& \mathrm{\delta y}^\top \left( \mathrm{L}^\top \right)^{-1} \mathrm{L}^{-1} \mathrm{\delta y} \nonumber \\
+      &=& \mathrm{z}^\top \mathrm{z}\,\text{,}
+\end{eqnarray*}
+where
+\begin{equation}
+\mathrm{z} = \mathrm{L}^{-1} \mathrm{\delta y}\,\text{.}
+\end{equation}
+If the Cholesky factorization fails, we can employ an LDL$^\top$ decomposition instead; however, it's dramatically easier from a verification and algorithmic standpoint to mark measurements with Cholesky decomposition errors as having failed the edit check, and not allow the failed measurement to contaminate the state or covariance.
+
+The Kalman gain is given by
+\begin{equation}
+\mathrm{K} = \mathrm{W}_u^{-1} \mathrm{P}\mathrm{H}^\top\,\text{,}
+\end{equation}
+and the measurement state update by
+\begin{eqnarray}
+\delta\mathrm{x} &=& \mathrm{K}\,\mathrm{\delta y} \\
+\hat{\mathrm{x}}^{+} &=& \hat{\mathrm{x}}^{-} + \delta\mathrm{x}\,\text{.}
+\end{eqnarray}
+
+To complete the covariance update, we use the Joseph form,
+\begin{equation}
+\mathrm{P}^{+} = \left( \mathrm{I} - \mathrm{K} \mathrm{H} \right) \mathrm{P}^{-} \left( \mathrm{I} - \mathrm{K} \mathrm{H} \right)^\top + \mathrm{K} \mathrm{R} \mathrm{K}^\top\,\text{,} \label{eq:joseph_form}
+\end{equation}
+which unfortunately requires several large matrix multiplications.
+
+\subsubsection{Scalar state update}
+
+We now examine an update strategy which requires no Cholesky decomposition and much less in the way of matrix multiplication math. In this strategy, we treat each scalar component of a measurement vector independently.
+
+The innovation and underweighted innovation are given by
+\begin{eqnarray}
+w_i     &=& \mathrm{H}_i \mathrm{P}^{-} \mathrm{H}_i^\top + r_i \\
+w_{i,u} &=& w_i k_u\text{,}
+\end{eqnarray}
+respectively; $r_i$ is the measurement variance for component $i$ and $k_u$ is the underweighting scalar. The residual edit check calculation is
+\begin{equation}
+z^2 = \frac{\delta y_i^2}{w_i}\,\text{.}
+\end{equation}
+It is also possible to check the entire measurement as a unit instead of component-by-component; for this, we use Eq.~\ref{eq:vector_residual_edit_check}.
+
+A Kalman gain matrix column is computed for each scalar measurement component $\delta y_i$ as
+\begin{equation}
+\mathrm{K}_i = \frac{1}{w_{i,u}} \mathrm{P}^{-}\mathrm{H}_i^\top\,\text{.}\label{eq:scalar_kalman_gain}
+\end{equation}
+The scalar state update corresponding to each measurement component is
+\begin{equation}
+\mathrm{\delta x}_i = \mathrm{K}_i \delta y_i\,\text{,}
+\end{equation}
+
+We now proceed to adjust the prior covariance with the new evidence, yielding a posterior covariance. The measurement residual covariance used in the Joseph form, Eq.~\ref{eq:joseph_form}, is
+\begin{equation}
+\mathrm{R} = \text{diag}(r_1, r_2, \cdots, r_k)\,\text{.}
+\end{equation}
+
+By multiplying out the covariance update equation, we get
+\begin{eqnarray*}
+\mathrm{P}^{+} &=& \mathrm{P}^{-} - \mathrm{K}\mathrm{H}\mathrm{P}^{-} - \mathrm{P}^{-}\mathrm{H}^\top\mathrm{K}^\top + \mathrm{K} \left( k_u (\mathrm{H}\mathrm{P}^{-}\mathrm{H}^\top + \mathrm{R})\right)\mathrm{K}^\top \\
+ &=& \mathrm{P}^{-} - \mathrm{K}\mathrm{H}\mathrm{P}^{-} - \mathrm{P}^{-}\mathrm{H}^\top\mathrm{K}^\top + \mathrm{K}\mathrm{W}_u\mathrm{K}^\top\,\textrm{,}
+\end{eqnarray*}
+where
+\begin{equation}
+\mathrm{W}_u = \text{diag}(w_{1,u}, w_{2,u}, \cdots, w_{k,u})\,\text{.}
+\end{equation}
+This form avoids large matrix multiplications by treating each measurement component as independent of the others. Notably, the quantity $\mathrm{P^{-}H^\top}$ and its transpose have already been calculated in Eq.~\ref{eq:scalar_kalman_gain}.
+
+\section{Measurement models} 
+
 \subsection{Horizon}
 We use the horizon navigation model described by \citet{Christian2017}.
 
 \subsubsection{Summary}
-Given a camera image of a lit horizon arc, we define a principal axis frame $pa$, whose $z$ axis points from the camera to the center of the planet, and whose $x$ axis is defined by the vector from the sun to the camera. The transformation from the camera frame to the principal axis frame is given by 
-\begin{eqnarray}
-\Tf{c}{pa} &=& \begin{bmatrix} \mathrm{e}_x & \mathrm{e}_y & \mathrm{e}_z \end{bmatrix} \\
-\mathrm{e}_z &=& -\frac{\vecr_{c/p}}{r_{c/p}} \\
-\mathrm{e}_s &=& \frac{\vecr_{c/s}}{r_{c/s}} \\
-\mathrm{e}_y &=& \mathrm{e}_z \times \mathrm{e}_s \\
-\mathrm{e}_x &=& \mathrm{e}_y \times \mathrm{e}_z\,\text{,}
-\end{eqnarray}
-where the subscripts $c/p$ and $c/s$ represent the camera with respect to the planet and sun, respectively.
+Given a camera image of a lit horizon arc, we define a principal axis frame $p$ and a camera frame $c$ whose positive $z$ axis points away from the camera (in the viewing direction).
 
 The position of the spacecraft camera with respect to the visible planet is given by
 \begin{equation}
-\vecr_{c/p} = -(\vecn^\top \vecn - 1)^{-1/2} \Tf{pa}{c} \mathrm{Q}^{-1} \vecn\,\text{,}\label{eq:horizon_model}
+\vecr_{c/p} = -(\vecn^\top \vecn - 1)^{-1/2} \, \Tf{p}{c}\, \mathrm{Q}^{-1} \vecn\,\text{,}\label{eq:horizon_model}
 \end{equation}
 where the semi axes of the planet ellipsoid model are given by $a$, $b$, and $c$ in 
 \begin{equation}
@@ -245,19 +339,46 @@ where the semi axes of the planet ellipsoid model are given by $a$, $b$, and $c$
 \end{equation}
 where
 \begin{eqnarray}
-\bar{\mathrm{s}}_i' &=& \frac{\bar{\mathrm{s}}_i}{\bar{s}_i} \\
-\bar{\mathrm{s}}_i &=& \mathrm{Q}\, \Tf{c}{pa}\, \mathrm{s}_i \\
+\bar{\mathrm{s}}_i' &=& \frac{\bar{\mathrm{s}}_i}{\bar{s}_i} \nonumber\\
+\bar{\mathrm{s}}_i &=& \mathrm{Q}\, \Tf{c}{pa}\, \mathrm{s}_i \nonumber\\
 \mathrm{s}_i &=& \begin{bmatrix}x_i \\ y_i \\ 1\end{bmatrix} = \begin{bmatrix}%
 \frac{1}{d_x} & -\frac{\alpha}{d_x d_y} & \frac{\alpha v_p - d_y u_p}{d_x d_y} \\
 0 & \frac{1}{d_y} & -\frac{v_p}{d_y} \\
-0 & 0 & 1\end{bmatrix}\begin{bmatrix}u_i \\ v_i \\ 1\end{bmatrix}\,\text{.}
+0 & 0 & 1\end{bmatrix}\begin{bmatrix}u_i \\ v_i \\ 1\end{bmatrix}\,\nonumber\text{.}
 \end{eqnarray}
 The last of these equations gives the pinhole camera model mapping the pixel coordinates of $m$ points on a body's lit limb $u_i, v_i$ to image plane coordinates $x_i, y_i$ using the camera parameters $\alpha$ (detector array skewness), $d_x$ and $d_y$ (ratio of focal length to pixel pitch), and principal point $(u_p, v_p)$ (the boresight intersection with the image plane). It is not straightforward to define $\bar{\mathrm{s}}'_i$ in a concise way, but we may think of them as unit vectors from the camera to the observed points in a world where the planet is a sphere of radius 1. In that same world, then, \vecn\ is a vector pointing from the camera to the center of the sphere. \citep{Christian2016}
 
 \subsubsection{Model}
 Having now briefly described the model, we can start to put it in the correct terms for our navigation filter. Eq.~\ref{eq:horizon_model} is given in terms of the camera position with respect to the planet, but we may choose to navigate relative to a planet that is not at the origin of our inertial frame. For example, we may wish to navigate with respect to the moon while still well outside of the moon's sphere-of-influence.
 
+Let us use $p$ to indicate the planet used as the inertial frame's center and $q$ to indicate the other. Then we can give the measurement, in the camera frame, as
+\begin{equation}
+\vecy = {}_c\vecr_{c/q} = \Tf{\hat{c}}{c} \Tf{b}{\hat{c}} \left( \Tf{\hat{b}}{b} \Tf{i}{\hat{b}} \left({}_i \vecr_{\text{imu}/p} - {}_i \vecr_{q/p} \right) + {}_b \vecr_{c/\text{imu}} \right)\,\text{.}
+\end{equation}
+Thus $\vecr_{q/p}$ is the distance of the observed planet from the inertial frame center. If the observed planet is also the inertial frame center, this quantity is a 0 vector. \Tf{\hat{c}}{c} represents the camera mismount (which is not a filter state, but might be in the future). In this model, ${}_i \vecr_{\text{imu}/p}$ is our filter's position state $\vecr$.
 
+The measurement partials are given by
+\begin{eqnarray}
+\frac{\partial\vecy}{\partial\vecr} &=& \Tf{b}{c} \Tf{i}{b} \\
+\frac{\partial\vecy}{\partial\delta\upphi} &=& \Tf{b}{c} \skewsymm{%
+\Tf{i}{\hat{b}} (\vecr - \vecr_{q/p}) %
+ } \\
+ \frac{\partial\vecy}{\partial\delta\uptheta} &=& \skewsymm{%
+ \Tf{b}{\hat{c}} \left( \Tf{i}{b} (\vecr - \vecr_{q/p}) + {}_b \vecr_{c/\text{imu}} \right) %
+ }\,\text{,}
+\end{eqnarray}
+%
+where $\delta\uptheta$ is used to indicate the mismount error state vector.
+
+This model likely needs a bias term as well, but we'll come back to that in a later iteration.
+
+\subsection{Global positioning system}
+\textsc{Gps} may be used in a separate filter in order to evaluate the results of the horizon filter. The \textsc{gps} provides measurements of position and velocity, both in an earth-centered, earth-fixed frame $e$.
+%\begin{eqnarray}
+%y_\text{pos} &=& {}_e\vecr_{\text{ant}/e} = \Tf{i}{e} \left( \Tf{b}{i} {}_b\vecr_{\text{ant}/\text{imu}} + {}_i\vecr_{\text{imu}/e} \right)
+%y_\text{vel} &=& {}_e\vecv_{\text{ant}/e}
+%y_\text{vel}
+%\end{eqnarray}
 
 %With semi-axes $a$, $b$, and $c$ of the ellipsoid model, we compute a body shape matrix
 %\begin{equation}
