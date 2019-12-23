@@ -210,11 +210,11 @@ This can be used to propagate the covariance forward in time:
 \end{equation}
 
 However, we may use a more carefully optimized formulation, from \cite{DSouza2011}, if processor cycles are in doubt.
-%\begin{eqnarray*}
-%\Phi(t_{k+1}, t_k) &=& \mathbf{I} + \mathbf{F}(t_k)\left(t_{k+1} - t_k\right) = \mathbf{I} + \mathbf{F}_k\,\Delta t\,\textrm{ and}\nonumber\\
-%\Phi(t_{k+1}, t_{k-1}) &=& \Phi(t_{k+1}, t_k)\,\Phi(t_k, t_{k-1})\,\textrm{, so}\nonumber\\
-%\Phi(t_{k+1}, t_{k-1}) &=& \Phi(t_k, t_{k-1}) + \mathbf{F}(t_k)\,\Phi(t_k, t_{k-1})\,\Delta t\,\textrm{.}
-%\end{eqnarray*}
+\begin{eqnarray*}
+\Phi(t_{k+1}, t_k) &=& \mathbf{I} + \mathbf{F}(t_k)\left(t_{k+1} - t_k\right) = \mathbf{I} + \mathbf{F}_k\,\Delta t\,\textrm{ and}\nonumber\\
+\Phi(t_{k+1}, t_{k-1}) &=& \Phi(t_{k+1}, t_k)\,\Phi(t_k, t_{k-1})\,\textrm{, so}\nonumber\\
+\Phi(t_{k+1}, t_{k-1}) &=& \Phi(t_k, t_{k-1}) + \mathbf{F}(t_k)\,\Phi(t_k, t_{k-1})\,\Delta t\,\textrm{.}
+\end{eqnarray*}
 
 \subsection{State update}
 
@@ -259,7 +259,7 @@ If the Cholesky factorization fails, we can employ an LDL$^\top$ decomposition i
 
 The Kalman gain is given by
 \begin{equation}
-\mathrm{K} = \mathrm{W}_u^{-1} \mathrm{P}\mathrm{H}^\top\,\text{,}
+\mathrm{K} =  \mathrm{P}^{-}\mathrm{H}^\top \mathrm{W}_u^{-1}\,\text{,}
 \end{equation}
 and the measurement state update by
 \begin{eqnarray}
