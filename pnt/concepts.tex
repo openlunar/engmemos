@@ -1,0 +1,335 @@
+\title{Concepts in lunar positioning, navigation, and timing}
+\author{
+        J.~O.~``Juno''~Woods,~Ph.D. \\
+        Director of Engineering Research \& Strategy\\
+        Open Lunar Foundation\\
+        San Francisco, California
+}
+\date{\today}
+%\date{November~19,~2019}
+
+\documentclass[12pt]{article}
+\usepackage{natbib}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\bibliographystyle{unsrtnat}
+\usepackage{newtxmath} % upright greek characters
+
+\DeclareMathOperator{\trace}{tr}
+\DeclareRobustCommand{\mathup}[1]{\begingroup\changegreek\mathrm{#1}\endgroup}
+\newcommand*\vect[1]{\mathrm{#1}}
+
+\makeatletter
+\def\changegreek{\@for\next:={%
+  alpha,beta,gamma,delta,epsilon,zeta,eta,theta,kappa,lambda,mu,nu,xi,pi,rho,sigma,%
+  tau,upsilon,phi,chi,psi,omega,varepsilon,vartheta,varpi,varrho,varsigma,varphi}%
+  \do{\expandafter\let\csname\next\expandafter\endcsname\csname\next up\endcsname}}
+\def\changegreekbf{\@for\next:={%
+  alpha,beta,gamma,delta,epsilon,zeta,eta,theta,kappa,lambda,mu,nu,xi,pi,rho,sigma,%
+  tau,upsilon,phi,chi,psi,omega,varepsilon,vartheta,varpi,varrho,varsigma,varphi}%
+  \do{\expandafter\def\csname\next\expandafter\endcsname\expandafter{%
+    \expandafter\bm\expandafter{\csname\next up\endcsname}}}}
+\makeatother
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+Some measurements are taken more readily from the ground, and others from the vantage point of the spacecraft. The goal of these measurements is, broadly, to facilitate better decision-making either by the spacecraft (and its crew) or by controllers on the ground.
+
+Planning requires knowledge of the spacecraft state, which includes not only position, velocity, and time, but also attitude and other relevant pieces of continuous information (biases, center of mass, and so on). From a navigation perspective, acceleration and angular velocity are usually not considered state components, as these are directly measured by the inertial measurement unit, though counterexamples exist. Spacecraft attitude on lunar missions is nearly always measured at the spacecraft rather than by the ground, these days using a star tracker, and we discuss it here only insofar as it is useful for better knowledge of position and velocity.
+
+\subsection{Notation}
+Before we get too much further, it's necessary to briefly describe some mathematical notation. This section can be skipped for a purely conceptual understanding.
+
+We employ italics to indicate a scalar variable, e.g. $\theta$. A vector variable is written $\mathup{\theta}$. The time derivative of a variable is indicated using a dot above the variable, $\dot{\theta}$.
+
+A hat may mean one of two different things. Most commonly, we will use $\hat{\vect{x}}$ to indicate the \textit{estimated} value of a vector; if $\vect{x}$ is the true state of the spacecraft, $\hat{\vect{x}}$ is its the state we have estimated from the available information. Occasionally, and when explicitly indicated, $\hat{\vect{u}}$ may indicate a normalized (or unit) vector.
+
+A tilde over a variable indicates that the variable is a measurement, e.g. $\tilde{\vect{y}}$.
+
+\section{Time, oscillators, and filters}
+
+Time presents a key constraint on navigation strategies. When taking measurements which require cooperation between two or more parties --- such as in radio ranging --- the subjective experience of time may differ due not only to relativity but also due to the nature of the oscillators we use to measure time. Before we can discuss measurements further, it is necessary to briefly explore some electrical engineering and physics concepts.
+
+\subsection{Electronic oscillators}
+An \textit{oscillator} is an electronic or mechanical component which generates a periodic signal, which might be a sine or square wave.
+
+Perhaps the simplest electronic oscillator is an \textit{LC circuit} \citep{Savary1827}, which is composed of an \textit{inductor} (L) and a \textit{capacitor} (C). A voltage across the capacitor causes a current to pass through the inductor, usually consisting of a coil of insulated wire. The current generates a magnetic field which opposes any change in the current, which in turn generates a voltage across the coil. That voltage causes the current to reverse direction, until charge is again built up on the capacitor. The energy oscillates between being stored in an electric field in the capacitor and a magnetic field in the inductor, and thus the circuit converts a direct current into an alternating current.
+
+Practically, a non-superconducting electronic oscillator also includes resistance, and is typically referred to as a \textit{RLC circuit}. Whether RLC or LC, the simplest of these circuits have a \textit{resonance frequency} (hertz) given by
+\begin{equation}
+f_0 = \frac{1}{2\pi} \omega_0\,\text{,}
+\end{equation}
+where
+\begin{equation}
+\omega_0 = \frac{1}{\sqrt{LC}}
+\end{equation}
+is the angular frequency (radians per second).
+
+\subsection{Electromechanical oscillators}
+A tuning fork is an example of a simple mechanical oscillator. An energy input creates a standing wave in the material which is dissipated over time as heat.
+
+Since we are interested in a voltage or current signal, however, we must look to an electromechanical tuning fork --- one which takes a voltage as an input and produces a voltage signal as an output. Piezoelectric crystals were introduced in 1918 \citep{Nicolson1918}, and found almost immediate use in radio \citep{Bayard1926}. The application of an electric field causes a deformation in the crystal. When the voltage is removed, the crystal resonates like a tuning fork, which produces an electric field; the crystal oscillator thus behaves like an RLC circuit.
+
+\subsection{Properties of oscillators}
+An oscillator can be viewed as a filter which selectively passes (or blocks) signals close to the resonance frequency. In a bandpass filter, as the signal frequency deviates from the resonance frequency, the power passed through the circuit falls. When the power falls to half its original value, we call this frequency a \textit{cutoff frequency}. Each bandpass filter has two, one above ($\omega_2$) and one below ($\omega_1$). We can thus define a \textit{bandwidth}
+\begin{equation}
+\Delta\omega = \omega_2 - \omega_1
+\end{equation} as the difference between the cutoff frequencies. The bandwidth is related to the resonance frequency by the \textit{fractional bandwidth}
+\begin{equation}
+B_f = \frac{\Delta\omega}{\omega_0}\,\text{,}
+\end{equation}
+which is the inverse of the \textit{quality factor} or $Q$ factor,
+\begin{equation}
+Q = \frac{1}{B_f}\,\text{.}
+\end{equation}
+
+The $Q$ factor tells how quickly the oscillator loses energy. A tuning fork that continues to resonate after being struck has a higher $Q$, whereas one which damps more quickly has a lower $Q$. Indeed, \citet{VanBeek2012} note that ``mechanical resonators exhibit very high $Q$-factors upto several million, while LC-based filters show a $Q$-factor of about 10 and $R$--$C$ or $g_m$--$C$ filters show a $Q$ of less than 1.'' If the $Q$ factor is low, the oscillator will show a broader spectrum of frequencies; but if the $Q$ factor is high, the spectrum will contain only a single frequency. Van Beek and Puers call this \textit{non-deterministic frequency stability}. % Note that this is not really an authoritative source. It's a review on MEMS oscillators. 
+
+\textit{Deterministic frequency stability} is also a consideration in oscillators \citep{VanBeek2012}. Much of the development work around quartz crystal oscillator technology related to thermal behavior of these mechanical resonators, whose resonant frequency may change according to temperature \citep{Frerking1996}. Modern quartz crystal oscillators resonant frequencies drift by only a few parts per million, whereas \textsc{cmos}-based oscillators are in the parts per thousand range \citep{VanBeek2012}. In addition to stability, we care that the frequency given for an oscillator is accurate to specification.
+
+\citet{VanBeek2012} also cites power dissipation as a concern. If the signal-to-noise ratio is not sufficiently high, the resonance will not be self-sustaining.
+
+\subsection{Atomic oscillators}
+The atomic clock, reviewed in \citet{Vessot1989}, provides for superior stochastic stability. Atoms resonate at characteristic frequencies; these frequencies are visible in atomic spectra diagrams, and are used as fingerprints to identify distant elements in astronomy, as well as molecules in laboratory samples. For the purposes of atomic clocks, we are most interested in the \textit{hyperfine spectra}, which are produced by interactions between the nucleus and the electrons.
+
+The caesium standard enabled time-keeping with greater accuracy than astronomically-derived measurements of time \citep{Essen1955}, resulting in the re-definition of the \textsc{si} second as equal to ``9,192,631,770 periods of radiation corresponding to the transition between the two levels of the hyperfine transition of the ground state of caesium 133'' \citep{BIPM1967}. When caesium-133's unpaired electron has a spin that is anti-parallel to the nuclear spin, the atom is in a lower energy state (total spin $F = 3$) than when the electron spin is in the same direction as that of the nucleus ($F = 4$). If just enough energy is supplied to an $F=3$ caesium atom to excite it to $F=4$, then after one period, the caesium re-emits the radiation to return to $F=3$.
+
+The rubidium gas cell standard was invented shortly thereafter (reviewed in \citet{Riley2019}), followed by the hydrogen maser \citep{Goldenberg1960}. The first measurements using strontium clocks were reported by \citet{Campbell2017}; whereas most atomic clocks emit radiation in the microwave range, optical clocks emit light.
+
+Today, a weighting strategy is used to average measurements from hundreds of atomic clocks to produce the International Atomic Time scale (\textsc{tai}), from which Coordinated Universal Time (\textsc{utc}) is derived \citep{BIPM2018}. For other applications, the choice of oscillator depends on the use-case. \citet{Stein1991} review a number of such trades between rubidium, caesium, hydrogen masers, and two types of crystal oscillators (\textsc{tcxo} and \textsc{ocxo}).
+
+It is common for a more accurate frequency standard to be used to fix a less accurate one over some time interval. A quartz or rubidium oscillator in a \textsc{gnss} receiver provides a signal whose output is constrained by timing signals from \textsc{gnss} satellites, which may contain a hydrogen, caesium, or rubidium standard. \textsc{Gps} satellites contain caesium and rubidium standards, for example; Galileo relies on hydrogen masers and caesium. Most commercial rubidium atomic clocks --- which are reasonably inexpensive to produce --- combine a rubidium oscillator with a quartz oscillator.
+
+\subsection{Oscillators and atomic clocks for space}
+\citet{Prestage2007} provide a reasonably good review of oscillators for use in space, and discuss the mercury ion atomic clock developed by JPL. Such devices are unsurprisingly both expensive and complex, consisting of --- at least --- an ultrastable quartz oscillator, and often an atomic clock resonator which disciplines the quartz oscillator. JPL's Deep Space Atomic Clock possesses an order of magnitude better stability than the \textsc{gps} rubidium clock with one-half the mass; it has comparable stability to much heavier space-rated atomic clocks.
+
+\subsection{Noise}
+Let us for a moment return to our discussion of filters and signals. Every signal transfers or converts some amount of energy (joules) over a fixed time interval (seconds), which we call the signal's \textit{power} (J/s or watts). We can describe the distribution of power in a signal $x(t)$ into various frequencies using the \textit{power spectral density}. The spectrum can be obtained from time series data using a Fourier transform.
+
+\textit{White noise} is a random signal with a constant power spectral density --- that is, the intensity of the signal at different frequencies is uniform. In a discrete signal, white noise samples are uncorrelated random variables with zero mean and finite variance.
+
+\textit{Flicker noise}, sometimes called \textit{pink noise}, has a $1/f$ power spectral density. That is, the intensity is proportional to the inverse of the frequency. This type of noise is common in oscillators and electronics.
+
+\subsection{Allan variance}
+Just as a universe consisting of a single rigid object can have no velocity, since velocity is relative, time is meaningless in a universe consisting of a solitary time-keeping device. There would be no basis for estimating the length of a period of such a clock. With two clocks, one might measure the period of the beat frequency in order to characterize one with respect to the other. This is fairly simple in the presence of white noise, but becomes harder with flicker noise, because \textit{finish me}
+
+\citet{Allan1966} developed a method for measuring the period of the beat frequency between two frequency standards. The \textit{Allan variance} provides \textit{finish me}
+
+%We can measure the stability of some oscillator against a reference clock using the \textit{two-sample variance}. Also known as \textit{Allan variance}, this measure is expressed as $\sigma_y^2(\tau)$, where $\tau$ is the observation duration.
+
+% Insert table of adevs for each timing source.
+
+%\begin{table}
+%\begin{tabular}[h]{r|r}
+%oscillator & stability, $\sigma_y(\tau)$ for $tau = 1$ s\\
+%\hline
+%temperature-controlled crystal (\textsc{tcxo}) & $10^{-9}$ \\
+%microcomputer-controlled crystal (\textsc{mcxo}) & $10^{-10}$ \\
+%oven-controlled crystal (\textsc{ocxo}) & $10^{-12}$ \\
+%rubidium & $3\times10^{-11}$ \\
+%rubidium/crystal & $5\times10^{-12}$ \\
+%caesium & $5\times 10^{-11}$ \\
+%\hline
+%\end{tabular}
+%\caption{\textbf{Allan deviations of different oscillators.}\label{tab:adevs} \citep{Stein1991}}
+%\end{table}
+
+\subsection{When time matters}
+
+Frequency drift matters primarily during two-or-more-party collaboration using radio frequency signals, since these are generated using oscillators. Time tends to matter a great deal less when the oscillators have a great deal of stability (such as when taking measurements using lasers, which rely on similar physics to atomic clocks).
+
+In the vicinity of earth, \textsc{gnss} satellites provide not only position and velocity information, but also timekeeping. In school, \textsc{gps} is often taught as providing position triangulation between satellites, but that is an incomplete picture. \textsc{Gnss} constellations are aligned in time using ground updates and atomic clocks. The \textsc{gps} receiver must simultaneously solve for four scalar \textit{pseudoranges}, which are the signal time-of-flight plus some receiver clock drift. With that information in hand, position and clock drift (four values) can be uniquely calculated from the four scalar measurements. By measuring the Doppler shift in each signal, velocity may be uniquely determined as well.
+
+Radar and lidar measurements differ substantially because of the oscillator involved. The radar signal's stability varies according to the oscillator selected. The laser, however, \textit{is} the oscillator --- and functions much in the same way as an atomic clock, with all of the stability benefits thereof.
+
+\section{Measurements}
+In navigation, there is a vocabulary for describing the type of information in a measurement.
+
+Common scalar measurements include \textit{range}, \textit{range-rate}, and \textit{angles}. A range measurement provides a distance without any implied direction. A range-rate is its first derivative. Usually we say these are measured along a \textit{line of sight} (\textsc{los}), a unit vector, but that vector may not be included in the measurement information (or relevant), or may be so uncertain that we discard it.
+
+It is also important to note that the range and range-rate measurements along an unknown line of sight $\hat{\vect{u}}$ only include the components of the position and velocity measurements that are parallel to the line of sight, e.g.
+\begin{eqnarray}
+\rho &=& \vect{r} \cdot \hat{\vect{u}} \\
+\dot\rho &=& \dot{\vect{r}} \cdot \hat{\vect{u}}\,\text{,}
+\end{eqnarray}
+where $\vect{r}$ is the position, $\dot{\vect{r}}$ velocity, $\hat{\vect{u}}$ the line of sight unit vector, and $\dot\rho$ the scalar range-rate. Similarly, an angle measurement alone carves out a cone about a reference vector, but does not on its own describe a direction.
+
+A line of sight may also be measured in three-dimensional space; this is a unit vector, as previously mentioned. A line of sight has two degrees of freedom; if two components are given, the third can be determined from the first two, since the length of the vector is unity. A line of sight is also referred to as a direction or a bearing; for example, the combination of an azimuth (typically an angle about a vertical vector) and an elevation (angle relative to horizontal) can be used to produce a bearing.
+
+Including a range or range-rate in a line of sight vector adds an additional degree of freedom; now three numbers are required to fully describe the measurements. An example of a range-rate with line of sight measurement might come from a carefully directed laser measuring the Doppler shift of some object; this is not the same as a velocity measurement, since it only measures along the \textsc{los} and nothing is revealed about the components of velocity that aren't parallel with the measured vector. On the other hand, a range measurement along a line of sight \textit{is} essentially the same as a position measurement.
+
+Going back to our 2-\textsc{dof} bearing, if we provide an angle about a line of sight vector for a third degree of freedom, we now have an \textit{attitude} measurement. There are quite a few ways to represent attitudes (for a review, see \citet{Shuster1993}). For example, with three numbers we can represent an attitude as an angle about some unit vector,
+\begin{equation}
+\mathup{\theta} = \hat{\vect{u}}\theta\,\text{,}
+\end{equation}
+sometimes referred to as an \textit{axis--angle}. It is quite common, however, to see a \textit{unit quaternion}, which is a four-dimensional unit vector, used to represent an attitude. A unit quaternion is defined as
+\begin{equation}
+\vect{q} = \begin{bmatrix}\cos(\theta/2) \\
+\hat{\vect{u}} \sin(\theta/2)\end{bmatrix}\,\text{,}
+\end{equation}
+though the order of the scalar and vector components may vary.
+
+A key challenge in navigation is the development of sensor models for converting dense datasets into simple measurements. For example, a lidar provides a point cloud --- effectively an array of many line of sight measurements with ranges --- and our task might be to identify a single position vector which describes the object the lidar is imaging. Alternatively, we might have a model which produces a position and an attitude of the imaged object, if we wish to land on it or rendezvous with it.
+
+Sensor models may also be simpler. For example, it's fairly straightforward to produce a model that converts a time of flight (given a signal with velocity $c$) to a range measurement.
+
+\subsection{Measurement models}
+In order to translate a measurement into state information, we need a \textit{measurement model}
+\begin{equation}
+\vect{y} = h(\vect{x})\,\text{,}
+\end{equation}
+generally a linear function which relates a perfect (noiseless) measurement to the true state. Without going into too much math around Kalman filters, we are usually interested in the \textit{measurement residual}. If the actual measurement is $\tilde{\vect{y}}$, and we can model the measurement we'd expect at a given estimated state using $h(\hat{\vect{x}})$, we write the measurement residual as
+\begin{equation}
+\delta\vect{y} = \tilde{\vect{y}} - h(\hat{\vect{x}})\,\text{.}
+\end{equation}
+
+The rate of change of the measurement with respect to the state is written as
+\begin{equation}
+\vect{H} = \left.\frac{\partial h(\vect{x})}{\partial \vect{x}}\right|_{\hat{\vect{x}}}\,\text{.}
+\end{equation}
+If the measurement is a scalar $y$ instead of a vector $\vect{y}$, then $\vect{H}$ is a vector of the same length ($n$) as $\vect{x}$, where each component describes how much information the measurement provides about each state component. If the measurement is a vector of size $m$, $\vect{H}$ is a matrix of size $m\times n$, where column $\vect{H}_{*,j}$ describes the contribution of scalar measurement component $y_j$ to knowledge of each of the state components.
+
+\subsection{Information and dilution of precision}
+The \textit{Fisher information matrix} for a given measurement is defined as
+\begin{equation}
+\vect{N} = \vect{H}^\top \vect{H}\,\text{.}
+\end{equation}
+If the measurements contain no information about state component $x_i$, column $i$ and row $i$ of $N$ will both contain zeros. Likewise, if two columns $i$ and $k$ of $H$ contain the same information --- information which is not \textit{linearly independent} --- these columns (or rows) in $N$ will be identical.
+
+The measurement information matrix is also useful in understanding how the geometry of measurements will affect our understanding of the state further down the road. In \textsc{gps} research, the term \textit{dilution of precision} is commonly used. By taking the inverse of the measurement information matrix, we get a covariance. Looking at the square root of the diagonal of that covariance, we get out scaling values which give a sense for how much the measurements can tell us about the state components we're trying to observe.
+
+\subsubsection{Example}
+Consider pseudorange measurements from four satellites. Neglecting time, a measurement model for the range to satellite $i$ might look like
+\begin{equation*}
+h_i(\hat{\vect{r}}) = \|\vect{r}_i - \vect{\hat{r}}\|\,\text{.}
+\end{equation*}
+We can compute the Jacobian as follows:
+\begin{eqnarray*}
+h_i(\hat{\vect{r}}) &=& \left((\vect{r}_i - \vect{\hat{r}})^\top (\vect{r}_i - \vect{\hat{r}}) \right)^{1/2} \\
+\vect{H}_i = \left.\frac{\partial h_i(\vect{r})}{\partial \vect{r}}\right|_{\hat{\vect{r}}} &=& \left(\vect{r}_i - \vect{\hat{r}}\right)^\top \left((\vect{r}_i - \vect{\hat{r}})^\top (\vect{r}_i - \vect{\hat{r}}) \right)^{-1/2} \\
+&=& \frac{\left(\vect{r}_i - \vect{\hat{r}}\right)^\top}{\|\vect{r}_i - \vect{\hat{r}}\|} = \frac{1}{\|\vect{r}_i - \vect{\hat{r}}\|} \begin{bmatrix} x_i - \hat{x} & y_i - \hat{y} & z_i - \hat{z} \end{bmatrix}\,\text{.}
+\end{eqnarray*}
+
+Let's plug in some numbers. If all of the measurements are taken of a lunar spacecraft --- large $x \approx 384400$, which is the radius of the moon's orbit, and small $y$ and $z$ of around 6371, earth's radius --- from three ground stations on earth, we get out rows of $\vect{H}$ that look approximately like this:
+\begin{equation}
+\vect{H} = \begin{bmatrix} 0.9999 & 0.017 & 0.017\\
+0.9999 & 0.0 & 0.017 \\
+0.9999 & 0.017 & 0.0\end{bmatrix}\,\text{,}
+\end{equation}
+which gives us dilutions like
+\begin{eqnarray*}
+\sigma_x &=& 1.73 \\
+\sigma_y &=& 83.2 \\
+\sigma_z &=& 83.2\,\text{.}
+\end{eqnarray*}
+These tell us that we will get about 48 times much more knowledge in the direction parallel to the vector to the moon than we get in the two perpendicular axes. The effect is exaggerated if the observations are taken from the equator instead of the poles, as the values in the $z$ column of $\vect{H}$ are then reduced; the $y$ values will be subject to rotation of the earth and might increase slightly.
+
+\subsection{Baseline}
+The above example illustrates the concept of \textit{baseline} when making observations of faraway objects. Ground stations which are placed at extreme locations provide more knowledge about the axes perpendicular to the mean line of sight.
+
+If the measurements are range measurements, a smaller baseline tells us mostly about how far away the object is. A larger baseline provides bearing information as well.
+
+If, on the other hand, the measurements are solely bearing measurements, the situation is reversed: a larger baseline provides range information. This is roughly analogous to how stereo vision works to create depth perception in animals with forward-facing eyes. The same effect can also be achieved using a single eye or camera by taking a sequence of measurements from multiple positions, a strategy used in chickens, and any other animals. Both strategies are employed in lunar positioning, and we can compare them using the numerical strategies just described.
+
+\section{Measurements}
+\subsection{Radiometric ranging}
+\subsubsection{One-way ranging}
+As previously described, a one-way ranging strategy provides a pseudorange, which is the sum of the time of flight, the clock drift between the sender and receiver, and any atmospheric transmission delay. Such pseudorange measurements are typically employed in \textsc{gnss} receivers. Pseudorange measurements also provide range-rate information.
+
+\subsubsection{Two-way ranging}
+A relatively straightforward modification is coherent two-way ranging. Typically, a ground station with a stable oscillator broadcasts a signal, which is received and \textit{coherently} (without delay, sometimes referred to as a \textit{bent pipe}) re-transmitted by the spacecraft. Because the signal returned to the ground was produced by the original oscillator and doesn't involve the spacecraft clock, a round-trip time of flight and Doppler shift can be measured directly, without any need to consider clock bias. A challenge is that the earth-based ground station moves between transmission and receipt of the signal, so we end up dealing with a model that looks like
+\begin{equation}
+\rho = \rho_{1,s} + \rho_{s,2}
+\end{equation}
+where $\rho_{1,s}$ is the length of a vector from location 1 to $s$ and $\rho_{s,2}$ is from $s$ to 2. A similar calculation is required for the range-rate. Fortunately, we typically know the position vector of location 2 with respect to location 1.
+
+\subsubsection{Three-way ranging}
+Sometimes, the spacecraft moves beneath the horizon from the perspective of the ground station used to transmit the two-way ranging signal, and a second ground station can be used. This strategy usually requires that one ground station provide the reference frequency to the other ground station.
+
+\subsubsection{Delta-differential one-way ranging}
+A modification of one-way ranging involves the spacecraft's one-way signal being received simultaneously by two ground stations, known as \textit{differential one-way ranging}. It can then be determined how much longer it took for the signal to reach one ground station than the other --- a \textit{range difference} measurement. Such a measurement is usually interpreted as an angle in the plane formed by the two ground stations and the spacecraft; the line of sights are not known well enough to be useful. By measuring a nearby known source (such as a quasar) before and after measuring the spacecraft, as in \textit{delta-differential one-way ranging}, clock drifts and other biases can be estimated out.
+
+\subsubsection{Four-way ranging (relayed two-way ranging)}
+Four-way ranging typically involves re-transmission via a relay satellite to the client spacecraft. The four `ways' are ground to relay, relay to client, client to relay, and relay back to ground. The range and Doppler measurements must account for four different lines of sight, since both the relay and the ground segment move during the measurement. This strategy is used by \textsc{Nasa}'s Tracking and Data Relay System (\textsc{tdrss}), whose satellites are in geosynchronous orbit. It has also been used by Kaguya and its Okina relay to estimate a gravity model for the lunar farside \citep{Iwata2009}; Okina occupied a highly elliptical lunar polar orbit ($100\times2400$ km).
+
+The method requires two-way measurements be taken of the relay, as knowledge of its state is needed to determine the client state. Such relays are generally able to avoid reliance on atomic clocks by use of phase-locked loops, where the ground signal carrier frequency is used as the input oscillator for the relay, and the relay carrier frequency in turn serves as the input oscillator for the client \citep{Iwata2009}.
+
+\textit{Relayed ranging and range-rate measurements using phase-locked loops begin to resemble a mesh navigation network. Do such things exist?}
+
+\subsubsection{Radar altimetry and velocimetry}
+If attitude measurements are available, this is a ranged line of sight measurement (3 degrees of freedom). Without attitude, it is strictly a scalar range along an unknown line of sight.
+
+The Doppler shift may also be measured when the radar pulse is received. This measurement takes the same form as radar altimetry, except it returns a range-rate along the line of sight. The technique is also referred to as Doppler radar.
+
+\textit{Range at which this is relevant for a spacecraft?}
+
+\subsection{Laser techniques}
+
+\subsubsection{One-way forward laser ranging}
+A one-way laser ranging technique is utilized for Earth-based tracking of the Lunar Reconnaissance Orbiter \citep{Sun2013}. An Earth-based ground station uses fairly well-known state information about the LRO to direct a laser communications signal. This 532 nm signal is received by an optical fiber bundle on LRO, which relays it to the laser altimeter optics.
+
+As with radiometric ranging, the laser ranging system doubles as a communication system. It differs from radiometric ranging, however, in two key ways. Firstly, the laser must be carefully pointed; the bearing to the client must already be fairly well-known. Indeed, returned telemetry from LRO includes data on laser intensity that can be used to refine the pointing.
+
+Secondly, but nevertheless of great importance, the laser ranging signal may be used to synchronize to \textsc{gps} time or some other oscillator. Thus, a well-aimed laser may be used to circumvent the problem of the differing subjective experiences of time in addition to that of unstable onboard oscillators.
+
+% 10^-12 oscillator stability
+
+\subsubsection{Two-way laser ranging}
+The \textsc{Ladee} experiment, which demonstrated two-way ranging and data transmission, used a multi-step process for the handshake needed for beam pointing, roughly as follows:
+\begin{enumerate}
+\item The ground terminal had to acquire a target 384,400 km away with a beacon beam angular diameter of 45 microradians, which meant the beam would create a 19 km spot on the moon, subject to atmospheric distortion. Initial pointing was determined by known ephemeris data in combination with attitude measurements using stars.
+\item Upon detection of the uplink beam by the lunar terminal's wide-field detector, the downlink beam could be directed toward the ground terminal.
+\item The ground terminal used the detection of the downlink beam to improve its uplink pointing.
+\end{enumerate}
+Note that data were transmitted using a narrower beam.
+
+The mount for such laser ground terminals is generally azimuth--elevation --- that is, the ground telescopes can pivot about the up axis, and at some azimuth the telescopes can be pointed at some elevation. In the case of \textsc{Ladee}, four co-mounted downlink telescopes were utilized along with four uplink telescopes. \citep{Murphy2014}
+
+\subsubsection{Laser altimetry, velocimetry, and Doppler lidar}
+This technique is fundamentally similar to radar altimetry and velocimetry.
+
+A three-beam device known as a Doppler lidar also exists; the beams are fixed and provide range and range-rate measurements along three lines of sight. The range-rate measurements provide a great deal of information at little cost. For navigation on Earth and Mars, the Doppler lidar takes precise enough velocity measurements to be able to detect the rotation of the planet, and when coupled with an inertial measurement unit, the range-rate measurements alone are capable of providing latitude and altitude measurements. The Moon rotates far less quickly, so these measurements are not useful for determining latitude or altitude.
+
+Direct use of range measurements requires an accurate terrain model, which is technically challenging to produce. However, such a strategy is most likely used for navigation of cruise missiles on Earth, and its use on the Moon is not impossible to envision.
+
+Commercial off-the-shelf laser altimeters are difficult to find. Hearsay suggests some missions may be custom-ordering theirs from lidar manufacturers.
+
+\subsubsection{Lidar}
+Lidars provide a 3-dimensional point cloud, an array of ranged lines of sight measurements. A sensor model must be used to translate these data into useful information for the navigation filter. Most space-based sensors are scanning or flash lidars, with no moving parts \citep{Christian2013}.
+
+Because of the limited range of lidar sensors, they are usually used for hazard detection and avoidance. The cost limits their applicability; they are unlikely to be used on robotic missions, but will be essential on crewed flights.
+
+\subsection{Optical measurements}
+
+\subsubsection{Horizon}
+Horizon measurements require good attitude knowledge. They work by fitting an ellipsoid model to the lit limb of a planet, and return a ranged line of sight to the center of the ellipsoid. The range information is substantially less accurate than the bearing. The accuracy of both range and bearing is correlated with how much of the nearside of the planet is lit.
+
+Horizon measurements may also be taken of Earth; the Orion capsule uses its docking camera to take Earth horizon measurements as a backup in case of a communications problem. However, atmospheric distortion presents some challenges when fitting an ellipsoid to Earth.
+
+The planet must occupy a sufficiently large portion of the focal plane array to be useful for horizon navigation. When the planet outgrows the focal plane array, this technique is no longer usable.
+
+\subsubsection{Terrain-relative}
+Terrain-relative navigation takes many forms and provides many types of measurements:
+\begin{itemize}
+\item Position using unknown features (requires overlapping images where each image shares three features with the preceding one)
+\item Crater or other features in a database \citep{Christian2020}
+\item Optical flow of features
+\item Delta position using unknown features
+\end{itemize}
+
+\subsubsection{Hazard-relative}
+\textsc{Slam}, generally.
+
+\subsection{Global techniques}
+These are techniques which don't rely on the earth or moon and can be utilized anywhere in the solar system.
+
+\subsubsection{X-ray}
+
+\subsubsection{Star}
+
+
+
+\bibliography{concepts}
+\end{document}
