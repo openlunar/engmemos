@@ -11,17 +11,17 @@
     rounded corners}
 }
 \begin{document}
-\begin{tikzpicture}[node distance = 4.2cm, thick, nodes = {align = center}, >=latex]
+\begin{tikzpicture}[node distance = 4.5cm, thick, nodes = {align = center}, >=latex]
   \node[basic box = blue, anchor = west, yshift = -1cm] (terrain) { terrain \\ models };
+  \node[basic box = blue, anchor = west, yshift = 1cm] (ephemeris) { ephemeris \\ data };
   \node[basic box = blue, anchor = west] (pbimagery) { pushbroom \\ images };
-  \node[basic box = green, anchor = center, right of = pbimagery, minimum height = 1.6cm] (betterterrain) { pixel-scale \\ terrain };
-  \node[basic box = green, anchor = east, right of = betterterrain] (pcimagery) { pin-hole \\ images };
-  \node[basic box = green, anchor = west, right of = pcimagery] (features) { features };
+  \node[basic box = green, anchor = center, right of = pbimagery, minimum height = 1.6cm] (unprojected) { un-projected \\ images };
+  \node[basic box = green, anchor = west, right of = unprojected] (features) { features };
   \node[basic box = green, anchor = west, right of = features] (descriptors) { descriptors };
-  \draw[->]    (pbimagery) -- (betterterrain) node [midway,above] { photometry };
-  \draw[->]    (terrain) -- (betterterrain);
-  \draw[->]    (betterterrain) -- (pcimagery) node [midway,below] { re-project };
-  \draw[->]    (pcimagery) -- (features) node [midway,below] { feature \\ extraction};
+  \draw[->]    (pbimagery) -- (unprojected);% node [midway,above] { un-project };
+  \draw[dashed,->]    (terrain) -- (unprojected) node [midway,below] { un-project };
+  \draw[dashed,->]    (ephemeris) -- (unprojected);
+  \draw[->]    (unprojected) -- (features) node [midway,below] { feature \\ extraction};
   \draw[->]    (features) -- (descriptors) node [midway,below] { descriptor \\ extraction };
 \end{tikzpicture}
 \end{document}
