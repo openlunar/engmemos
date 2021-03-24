@@ -45,8 +45,9 @@
 \ProvidesClass{olfmemo}
               [2020/10/15 v1.0l
  Open Lunar Foundation tech memo document class modified from standard LaTeX article class]
-\DeclareRobustCommand\docnumber[1]{\gdef\@docnumber{#1}}
+\DeclareRobustCommand\docnumber[2]{\gdef\@docnumber{#1}\gdef\@docdraft{#2}}
 \def\@docnumber{\@latex@error{No \noexpand\docnumber given}\@ehc}
+\def\@docdraft{\@latex@error{No \noexpand\docdraft given}\@ehc}
 \newcommand\@ptsize{}
 \newif\if@restonecol
 \newif\if@titlepage
@@ -196,8 +197,10 @@
   \global\let\@author\@empty
   \global\let\@date\@empty
   \global\let\@docnumber\@empty
+  \global\let\@docdraft\@empty
   \global\let\@title\@empty
   \global\let\docnumber\relax
+  \global\let\docdraft\relax
   \global\let\title\relax
   \global\let\author\relax
   \global\let\date\relax
@@ -232,8 +235,10 @@
   \global\let\@author\@empty
   \global\let\@date\@empty
   \global\let\@docnumber\@empty
+  \global\let\@docdraft\@empty
   \global\let\@title\@empty
   \global\let\docnumber\relax
+  \global\let\docdraft\relax
   \global\let\title\relax
   \global\let\author\relax
   \global\let\date\relax
@@ -245,7 +250,7 @@
   \vskip 2em%
   \begin{center}%
   \let \footnote \thanks
-    {\large\textsc{olf-eng-\@docnumber} \par}%
+    {\large\textsc{olf-eng-\@docnumber} ({\@docdraft}) \par}%
     \vskip 1em%
     {\LARGE \@title \par}%
     \vskip 1.5em%

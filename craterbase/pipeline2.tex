@@ -15,13 +15,13 @@
   \node[basic box = blue, anchor = west, yshift = -1cm] (terrain) { terrain \\ models };
   \node[basic box = blue, anchor = west, yshift = 1cm] (ephemeris) { ephemeris \\ data };
   \node[basic box = blue, anchor = west] (pbimagery) { pushbroom \\ images };
-  \node[basic box = green, anchor = center, right of = pbimagery, minimum height = 1.6cm] (unprojected) { un-projected \\ images };
-  \node[basic box = green, anchor = west, right of = unprojected] (features) { features };
+  \node[basic box = green, anchor = center, right of = pbimagery, minimum height = 1.6cm] (projfeatures) { projected \\ features };
+  \node[basic box = green, anchor = west, right of = projfeatures] (features) { un-projected \\ features };
   \node[basic box = green, anchor = west, right of = features] (descriptors) { descriptors };
-  \draw[->]    (pbimagery) -- (unprojected);% node [midway,above] { un-project };
-  \draw[dashed,->]    (terrain) -- (unprojected) node [midway,below] { un-project };
-  \draw[dashed,->]    (ephemeris) -- (unprojected);
-  \draw[->]    (unprojected) -- (features) node [midway,below] { feature \\ extraction};
+  \draw[->]    (pbimagery) -- (projfeatures);
+  \draw[dashed,->]    (terrain) -- (projfeatures) node [midway,below] { feature \\ extraction };
+  \draw[dashed,->]    (ephemeris) -- (projfeatures);
+  \draw[->]    (projfeatures) -- (features) node [midway,below] { homography };
   \draw[->]    (features) -- (descriptors) node [midway,below] { descriptor \\ extraction };
 \end{tikzpicture}
 \end{document}
